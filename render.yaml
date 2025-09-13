@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: phishing-detector
+    name: phishing-api
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn app:app --host 0.0.0.0 --port 10000"
-    plan: free
+    runtime: python3.11   # or python3.12
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port 10000
