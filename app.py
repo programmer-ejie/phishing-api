@@ -7,15 +7,51 @@ import os
 import requests
 
 # ===============================
-# 1. Load Models & Data
+# 0. Setup Dataset Directory
 # ===============================
 DATASET_DIR = "dataset"
+os.makedirs(DATASET_DIR, exist_ok=True)
 
+# ===============================
+# 1. Download files from Google Drive
+# ===============================
+FILE_IDS = {
+    "phishing_detector_model.pkl": os.getenv("MODEL_FILE_ID"),
+    "scaler.pkl": os.getenv("SCALER_FILE_ID"),
+    "feature_columns.pkl": os.getenv("FEATURES_FILE_ID"),
+    "phishtank.csv": os.getenv("PHISHTANK_FILE_ID"),
+}
+
+def download_from_drive(file_id, dest_path):
+    """Download file from Google Drive if it does not exist locally"""
+    if not file_id:
+        print(f"⚠️ Missing FILE_ID for {dest_path}, skipping.")
+        return
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    if not os.path.exists(dest_path):
+        print(f"⬇️ Downloading {dest_path}...")
+        try:
+            r = requests.get(url)
+            r.raise_for_status()
+            with open(dest_path, "wb") as f:
+                f.write(r.content)
+            print(f"✅ Downloaded {dest_path}")
+        except Exception as e:
+            print(f"❌ Failed to download {dest_path}: {e}")
+    else:
+        print(f"✅ {dest_path} already exists.")
+
+for filename, file_id in FILE_IDS.items():
+    dest_path = os.path.join(DATASET_DIR, filename)
+    download_from_drive(file_id, dest_path)
+
+# ===============================
+# 2. Load Models & Data
+# ===============================
 rf_model = joblib.load(os.path.join(DATASET_DIR, "phishing_detector_model.pkl"))
 scaler = joblib.load(os.path.join(DATASET_DIR, "scaler.pkl"))
 TRAIN_FEATURES = joblib.load(os.path.join(DATASET_DIR, "feature_columns.pkl"))
 
-# Load PhishTank blocklist
 def load_phishtank_blocklist(file_path=os.path.join(DATASET_DIR, "phishtank.csv")):
     try:
         df = pd.read_csv(file_path, dtype=str)
@@ -31,7 +67,7 @@ def load_phishtank_blocklist(file_path=os.path.join(DATASET_DIR, "phishtank.csv"
 phishtank_urls = load_phishtank_blocklist()
 
 # ===============================
-# 2. Google Safe Browsing
+# 3. Google Safe Browsing
 # ===============================
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", None)
 
@@ -56,7 +92,7 @@ def check_with_google_safebrowsing(url, api_key=GOOGLE_API_KEY):
         return False
 
 # ===============================
-# 3. Feature Extraction
+# 4. Feature Extraction
 # ===============================
 def extract_url_features(url):
     parsed = urlparse(url)
@@ -79,7 +115,7 @@ def extract_url_features(url):
     return {col: feats.get(col, 0) for col in TRAIN_FEATURES}
 
 # ===============================
-# 4. FastAPI App
+# 5. FastAPI App
 # ===============================
 app = FastAPI()
 
@@ -117,4 +153,3 @@ def check_url(url: str = Query(...)):
         "score": float(ml_proba),
         "decision": decision
     })
-S
